@@ -178,6 +178,7 @@ with st.sidebar:
                     use_container_width=True,
                 ):
                     st.session_state.selected_release = name
+                    st.session_state["df_release"] = name
                     # Switch to correct geo if international
                     if item["country"] != "US":
                         st.session_state.geo_mode = "intl"
@@ -272,6 +273,7 @@ with tab_macro:
                     st.session_state.selected_cat_id = cat["id"]
                     if cat.get("releases"):
                         st.session_state.selected_release = cat["releases"][0]
+                        st.session_state["df_release"] = cat["releases"][0]
                     st.rerun()
 
         # Get selected category data
@@ -287,6 +289,7 @@ with tab_macro:
                 with chip_cols[i % 3]:
                     if st.button(rel, key=f"rel_{rel}", use_container_width=True):
                         st.session_state.selected_release = rel
+                        st.session_state["df_release"] = rel
                         st.rerun()
 
         st.divider()
