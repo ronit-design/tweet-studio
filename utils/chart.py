@@ -33,7 +33,7 @@ XBOX_BG     = "#0D0D0D"
 XLINE_COL   = "#FFFFFF"
 MONO        = "Courier New"
 
-SERIES_COLORS = [BLUE_1, ORANGE_2, GREEN_3, MAGENTA_4, YELLOW_5]
+SERIES_COLORS = [ORANGE_2, BLUE_1, GREEN_3, MAGENTA_4, YELLOW_5]
 
 
 # ── Data helpers ───────────────────────────────────────────────────────────────
@@ -277,9 +277,13 @@ def render_bloomberg_chart(
     ax_xbox.set_facecolor(XBOX_BG)
     ax_xbox.set_ylim(0, 1)
     ax_xbox.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
-    for sp in ax_xbox.spines.values():
-        sp.set_edgecolor(XLINE_COL)
-        sp.set_linewidth(0.6)
+    # Only top border visible (where x-axis meets the main chart)
+    ax_xbox.spines["top"].set_edgecolor("#444444")
+    ax_xbox.spines["top"].set_linewidth(0.5)
+    ax_xbox.spines["bottom"].set_edgecolor("#333333")
+    ax_xbox.spines["bottom"].set_linewidth(0.4)
+    ax_xbox.spines["left"].set_visible(False)
+    ax_xbox.spines["right"].set_visible(False)
 
     if is_time_series:
         xlim  = ax_main.get_xlim()
