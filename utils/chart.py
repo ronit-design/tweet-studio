@@ -37,9 +37,26 @@ SERIES_COLORS = [AMBER, CYAN, YELLOW, GREEN, MAGENTA, PINK, LIME]
 
 def parse_pasted_data(raw: str) -> pd.DataFrame:
     """Parse tab-separated (Excel paste) or comma-separated data."""
-    raw = raw.strip()
-    sep = "\t" if "\t" in raw else ","
-    df = pd.read_csv(io.StringIO(raw), sep=sep, thousands=",")
+    import csv
+
+    # Normalise line endings
+    raw = raw.strip().replace("\r\n", "\n").replace("\r", "\n")
+
+    # Detect delimiter from the first line
+    first_line = raw.split("\n")[0]
+    if "\t" in first_line:
+        sep = "\t"
+    else:
+        try:
+            dialect = csv.Sniffer().sniff(raw[:2048], delimiters=",;|")
+            sep = dialect.delimiter
+        except Exception:
+            sep = ","
+
+    # Only use thousands="," when the delimiter is not a comma
+    thousands = "," if sep != "," else None
+
+    df = pd.read_csv(io.StringIO(raw), sep=sep, thousands=thousands)
     df.columns = [str(c).strip() for c in df.columns]
     return df
 
