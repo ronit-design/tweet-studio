@@ -118,33 +118,14 @@ def render_bloomberg_chart(
     # ── Figure ─────────────────────────────────────────────────────────────────
     fig = plt.figure(figsize=(14, 7.5), facecolor=BG, dpi=150)
 
-    # Manual axis placement [left, bottom, width, height] in figure fraction.
-    # Leave right margin for y-axis pills.
-    L, R = 0.02, 0.91
+    # No header bar — Bloomberg chart view is pure black.
+    # Leave right margin for y-axis pills, bottom for x-axis boxes + footer.
+    L, R = 0.02, 0.88
     W    = R - L
 
-    ax_hdr    = fig.add_axes([0.00, 0.945, 1.00, 0.055])   # orange header
-    ax_main   = fig.add_axes([L,    0.135, W,    0.800])   # main plot
-    ax_xbox   = fig.add_axes([L,    0.065, W,    0.070])   # boxed x-axis
-    ax_footer = fig.add_axes([0.00, 0.000, 1.00, 0.065])   # footer
-
-    # ── HEADER ─────────────────────────────────────────────────────────────────
-    ax_hdr.set_facecolor(ORANGE_HDR)
-    ax_hdr.set_xlim(0, 1); ax_hdr.set_ylim(0, 1)
-    ax_hdr.axis("off")
-
-    ax_hdr.add_patch(mpatches.Rectangle((0.003, 0.1), 0.038, 0.8,
-                                         color=HDR_BOX_BG, zorder=2))
-    ax_hdr.text(0.022, 0.50, "GP", color=TEXT_W, fontsize=9,
-                fontfamily=MONO, fontweight="bold",
-                ha="center", va="center", zorder=3)
-
-    hdr_text = (title.upper() if title else "CHART") + "  <EQUITY> GP"
-    ax_hdr.text(0.050, 0.50, hdr_text, color=BG, fontsize=9,
-                fontfamily=MONO, fontweight="bold", ha="left", va="center")
-
-    ax_hdr.text(0.997, 0.50, datetime.now().strftime("%m/%d/%Y  %H:%M:%S"),
-                color=BG, fontsize=7, fontfamily=MONO, ha="right", va="center")
+    ax_main   = fig.add_axes([L,    0.095, W,    0.890])   # main plot
+    ax_xbox   = fig.add_axes([L,    0.035, W,    0.060])   # boxed x-axis
+    ax_footer = fig.add_axes([0.00, 0.000, 1.00, 0.035])   # footer
 
     # ── MAIN CHART ─────────────────────────────────────────────────────────────
     ax_main.set_facecolor(BG)
@@ -277,13 +258,10 @@ def render_bloomberg_chart(
     ax_xbox.set_facecolor(XBOX_BG)
     ax_xbox.set_ylim(0, 1)
     ax_xbox.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
-    # Only top border visible (where x-axis meets the main chart)
-    ax_xbox.spines["top"].set_edgecolor("#444444")
-    ax_xbox.spines["top"].set_linewidth(0.5)
-    ax_xbox.spines["bottom"].set_edgecolor("#333333")
-    ax_xbox.spines["bottom"].set_linewidth(0.4)
-    ax_xbox.spines["left"].set_visible(False)
-    ax_xbox.spines["right"].set_visible(False)
+    # All 4 spines white — creates the outer box, inner cells made by axvlines
+    for sp in ax_xbox.spines.values():
+        sp.set_edgecolor(XLINE_COL)
+        sp.set_linewidth(0.8)
 
     if is_time_series:
         xlim  = ax_main.get_xlim()
@@ -335,13 +313,12 @@ def render_bloomberg_chart(
     ax_footer.set_facecolor(BG)
     ax_footer.axis("off")
     ts = datetime.now().strftime("%d-%b-%Y %H:%M:%S")
-    ax_footer.text(0.005, 0.70,
-                   f"Copyright {datetime.now().year} Bloomberg Finance L.P.  "
-                   "All rights reserved.  "
-                   "This information may not be reproduced without prior written permission.",
+    footer_left  = f"  {title}  " + f"Copyright\u00ae {datetime.now().year} Bloomberg Finance L.P.  All rights reserved."
+    ax_footer.text(0.005, 0.50, footer_left,
                    color=TEXT_FAINT, fontsize=5.5, fontfamily=MONO, va="center")
-    ax_footer.text(0.005, 0.25, ts, color=TEXT_FAINT, fontsize=5.5,
-                   fontfamily=MONO, va="center")
+    ax_footer.text(0.995, 0.50, ts,
+                   color=TEXT_FAINT, fontsize=5.5, fontfamily=MONO,
+                   va="center", ha="right")
 
     # ── EXPORT ─────────────────────────────────────────────────────────────────
     buf = io.BytesIO()
