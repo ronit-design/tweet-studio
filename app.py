@@ -13,7 +13,7 @@ from utils.api import (
     generate_stock_tweets,
 )
 from utils.helpers import parse_tweet_blocks, get_upcoming_releases, format_date_label
-from utils.chart import parse_pasted_data, detect_date_col, render_bloomberg_chart
+from utils.chart import parse_pasted_data, detect_date_col, render_bloomberg_chart  # noqa: E501
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -649,6 +649,14 @@ with tab_chart:
                 st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
                 is_ts = st.checkbox("Time series", value=bool(date_col_guess), key="chart_is_ts")
 
+            col_xl, col_yl = st.columns(2)
+            with col_xl:
+                x_label = st.text_input("X axis label (optional)", key="chart_x_label",
+                                        placeholder="e.g. Date")
+            with col_yl:
+                y_label = st.text_input("Y axis label (optional)", key="chart_y_label",
+                                        placeholder="e.g. Index Value")
+
             if st.button("Generate Chart", type="primary", use_container_width=True, key="chart_gen_btn"):
                 if not y_cols:
                     st.error("Select at least one Y axis column.")
@@ -660,6 +668,8 @@ with tab_chart:
                                 x_col=x_col,
                                 y_cols=y_cols,
                                 title=chart_title,
+                                x_label=x_label,
+                                y_label=y_label,
                                 is_time_series=is_ts,
                             )
                             st.session_state.chart_png = png

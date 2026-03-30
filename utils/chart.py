@@ -1,6 +1,7 @@
 # utils/chart.py
 # Bloomberg GP-style chart renderer
 
+import csv
 import io
 from datetime import datetime
 
@@ -14,26 +15,28 @@ import numpy as np
 import pandas as pd
 
 # ── Bloomberg palette ──────────────────────────────────────────────────────────
-BG       = "#000000"
-ORANGE   = "#FF6600"
-HDR_BOX  = "#CC3300"
-AMBER    = "#FF8C00"
-CYAN     = "#00E5FF"
-YELLOW   = "#FFE600"
-GREEN    = "#00FF41"
-MAGENTA  = "#FF44FF"
-PINK     = "#FF6EC7"
-LIME     = "#7FFF00"
-GRID_COL = "#1C1C1C"
-TEXT_COL = "#FFFFFF"
-SUB_COL  = "#AAAAAA"
-DIM_COL  = "#444444"
-MONO     = "Courier New"
+BG          = "#000000"
+ORANGE_HDR  = "#FF6600"
+HDR_BOX_BG  = "#CC3300"
+BLUE_1      = "#3399FF"
+ORANGE_2    = "#FF9900"
+GREEN_3     = "#33FF99"
+MAGENTA_4   = "#FF33CC"
+YELLOW_5    = "#FFFF33"
+GRID_H      = "#2A2A2A"
+TEXT_W      = "#FFFFFF"
+TEXT_DIM    = "#888888"
+TEXT_FAINT  = "#505050"
+LEGEND_BG   = "#000000"
+LEGEND_BD   = "#333333"
+XBOX_BG     = "#0D0D0D"
+XLINE_COL   = "#FFFFFF"
+MONO        = "Courier New"
 
-SERIES_COLORS = [AMBER, CYAN, YELLOW, GREEN, MAGENTA, PINK, LIME]
+SERIES_COLORS = [BLUE_1, ORANGE_2, GREEN_3, MAGENTA_4, YELLOW_5]
 
 
-# ── Data helpers ──────────────────────────────────────────────────────────────
+# ── Data helpers ───────────────────────────────────────────────────────────────
 
 def _looks_like_date(s: str) -> bool:
     try:
@@ -44,10 +47,8 @@ def _looks_like_date(s: str) -> bool:
 
 
 def parse_pasted_data(raw: str) -> pd.DataFrame:
-    """Parse tab-separated (Excel paste) or comma-separated data.
-    Handles both normal (dates as rows) and transposed (dates as column headers) layouts.
-    """
-    import csv
+    """Parse tab-separated (Excel paste) or comma/semicolon-separated data.
+    Auto-detects transposed layout (dates as column headers)."""
 
     # Normalise line endings
     raw = raw.strip().replace("\r\n", "\n").replace("\r", "\n")
@@ -63,19 +64,22 @@ def parse_pasted_data(raw: str) -> pd.DataFrame:
         except Exception:
             sep = ","
 
-    # Only use thousands="," when the delimiter is not a comma
+    # Avoid using comma as both column separator and thousands separator
     thousands = "," if sep != "," else None
 
     df = pd.read_csv(io.StringIO(raw), sep=sep, thousands=thousands)
     df.columns = [str(c).strip() for c in df.columns]
 
     # Auto-detect transposed layout: if most column headers look like dates,
-    # the user pasted dates as columns — flip to rows.
+    # flip the dataframe to long format (dates become rows)
     date_col_count = sum(1 for c in df.columns if _looks_like_date(c))
     if date_col_count >= len(df.columns) * 0.7 and len(df.columns) > 3:
         df = df.T.reset_index()
-        df.columns = ["Date"] + [f"Value {i + 1}" if len(df.columns) > 2 else "Value"
-                                  for i in range(len(df.columns) - 1)]
+        n_val_cols = len(df.columns) - 1
+        df.columns = ["Date"] + (
+            ["Value"] if n_val_cols == 1
+            else [f"Series {i + 1}" for i in range(n_val_cols)]
+        )
 
     return df
 
@@ -92,208 +96,250 @@ def detect_date_col(df: pd.DataFrame) -> str | None:
     return None
 
 
-# ── Chart renderer ────────────────────────────────────────────────────────────
+# ── Chart renderer ─────────────────────────────────────────────────────────────
 
 def render_bloomberg_chart(
     df: pd.DataFrame,
     x_col: str,
     y_cols: list[str],
     title: str = "",
+    x_label: str = "",
+    y_label: str = "",
     is_time_series: bool = True,
 ) -> bytes:
-    """Render a Bloomberg GP-style chart and return PNG bytes."""
+    """Render a Bloomberg GP-style chart. Returns PNG bytes."""
 
-    # ── Prepare x values ──────────────────────────────────────────────────────
+    # Prepare x values
     if is_time_series:
         x_vals = pd.to_datetime(df[x_col], infer_datetime_format=True)
     else:
         x_vals = df[x_col].astype(str)
 
-    # ── Figure + axes layout ──────────────────────────────────────────────────
+    # ── Figure ─────────────────────────────────────────────────────────────────
     fig = plt.figure(figsize=(14, 7.5), facecolor=BG, dpi=150)
 
-    # Manual placement: [left, bottom, width, height] in figure fraction
-    ax_hdr    = fig.add_axes([0.000, 0.930, 1.000, 0.060])   # orange header
-    ax_main   = fig.add_axes([0.050, 0.145, 0.900, 0.775])   # chart
-    ax_period = fig.add_axes([0.000, 0.055, 1.000, 0.055])   # period bar
-    ax_footer = fig.add_axes([0.000, 0.000, 1.000, 0.040])   # footer
+    # Manual axis placement [left, bottom, width, height] in figure fraction.
+    # Leave right margin for y-axis pills.
+    L, R = 0.02, 0.91
+    W    = R - L
 
-    # ── Header bar ────────────────────────────────────────────────────────────
-    ax_hdr.set_facecolor(ORANGE)
-    ax_hdr.set_xlim(0, 1)
-    ax_hdr.set_ylim(0, 1)
+    ax_hdr    = fig.add_axes([0.00, 0.945, 1.00, 0.055])   # orange header
+    ax_main   = fig.add_axes([L,    0.135, W,    0.800])   # main plot
+    ax_xbox   = fig.add_axes([L,    0.065, W,    0.070])   # boxed x-axis
+    ax_footer = fig.add_axes([0.00, 0.000, 1.00, 0.065])   # footer
+
+    # ── HEADER ─────────────────────────────────────────────────────────────────
+    ax_hdr.set_facecolor(ORANGE_HDR)
+    ax_hdr.set_xlim(0, 1); ax_hdr.set_ylim(0, 1)
     ax_hdr.axis("off")
 
-    # "GP" function box
-    ax_hdr.add_patch(mpatches.Rectangle((0.003, 0.08), 0.038, 0.84,
-                                         color=HDR_BOX, zorder=2))
-    ax_hdr.text(0.022, 0.50, "GP", color=TEXT_COL, fontsize=8.5,
+    ax_hdr.add_patch(mpatches.Rectangle((0.003, 0.1), 0.038, 0.8,
+                                         color=HDR_BOX_BG, zorder=2))
+    ax_hdr.text(0.022, 0.50, "GP", color=TEXT_W, fontsize=9,
                 fontfamily=MONO, fontweight="bold",
                 ha="center", va="center", zorder=3)
 
-    # Title in header
-    hdr_label = (title.upper() if title else "CHART") + "  <EQUITY> GP"
-    ax_hdr.text(0.050, 0.50, hdr_label, color=BG, fontsize=8.5,
-                fontfamily=MONO, fontweight="bold",
-                ha="left", va="center")
+    hdr_text = (title.upper() if title else "CHART") + "  <EQUITY> GP"
+    ax_hdr.text(0.050, 0.50, hdr_text, color=BG, fontsize=9,
+                fontfamily=MONO, fontweight="bold", ha="left", va="center")
 
-    # Timestamp top-right
-    ax_hdr.text(0.997, 0.50,
-                datetime.now().strftime("%m/%d/%Y  %H:%M:%S"),
-                color=BG, fontsize=7, fontfamily=MONO,
-                ha="right", va="center")
+    ax_hdr.text(0.997, 0.50, datetime.now().strftime("%m/%d/%Y  %H:%M:%S"),
+                color=BG, fontsize=7, fontfamily=MONO, ha="right", va="center")
 
-    # ── Main chart ────────────────────────────────────────────────────────────
+    # ── MAIN CHART ─────────────────────────────────────────────────────────────
     ax_main.set_facecolor(BG)
 
-    # Spines in orange
-    for spine in ax_main.spines.values():
-        spine.set_edgecolor(ORANGE)
-        spine.set_linewidth(0.8)
+    # Only the right spine visible (thin grey)
+    ax_main.spines["top"].set_visible(False)
+    ax_main.spines["left"].set_visible(False)
+    ax_main.spines["bottom"].set_visible(False)
+    ax_main.spines["right"].set_edgecolor("#444444")
+    ax_main.spines["right"].set_linewidth(0.5)
 
-    # Grid
-    ax_main.grid(True, color=GRID_COL, linewidth=0.6,
-                 linestyle="-", which="major", zorder=0)
+    # Horizontal gridlines only, no vertical
+    ax_main.yaxis.grid(True, color=GRID_H, linewidth=0.6, linestyle="-")
+    ax_main.xaxis.grid(False)
     ax_main.set_axisbelow(True)
 
-    # y-axis on the right (Bloomberg default)
+    # y-axis on the right, suppress x-axis labels (boxed x handles them)
     ax_main.yaxis.tick_right()
     ax_main.yaxis.set_label_position("right")
+    ax_main.tick_params(axis="x", which="both", bottom=False, labelbottom=False)
 
-    # ── Plot series ───────────────────────────────────────────────────────────
-    y_min_global, y_max_global = np.inf, -np.inf
+    # ── PLOT SERIES ─────────────────────────────────────────────────────────────
+    y_min_g, y_max_g = np.inf, -np.inf
+    last_vals: dict[str, tuple[str, float]] = {}  # col -> (color, last_value)
 
     for idx, col in enumerate(y_cols):
         color  = SERIES_COLORS[idx % len(SERIES_COLORS)]
         y_vals = pd.to_numeric(df[col], errors="coerce")
 
         if is_time_series:
-            ax_main.plot(x_vals, y_vals, color=color, linewidth=1.3,
-                         label=col, solid_capstyle="butt", zorder=3)
+            ax_main.plot(x_vals, y_vals, color=color, linewidth=1.4,
+                         solid_capstyle="round", zorder=3)
         else:
-            bars = ax_main.bar(range(len(x_vals)), y_vals, color=color,
-                               label=col, alpha=0.85, zorder=3,
-                               width=0.6)
+            ax_main.plot(range(len(x_vals)), y_vals, color=color,
+                         linewidth=1.4, solid_capstyle="round", zorder=3)
 
-        # Last-value indicator: dashed horizontal + dot
         valid = y_vals.dropna()
         if not valid.empty:
-            last_y = valid.iloc[-1]
-            last_x = x_vals.iloc[len(valid) - 1] if is_time_series else len(valid) - 1
+            last_vals[col] = (color, float(valid.iloc[-1]))
+            y_min_g = min(y_min_g, float(valid.min()))
+            y_max_g = max(y_max_g, float(valid.max()))
 
-            ax_main.axhline(last_y, color=color, linewidth=0.4,
-                            linestyle="--", alpha=0.45, zorder=2)
-            ax_main.scatter([last_x], [last_y], color=color,
-                            s=22, zorder=5, linewidths=0)
+    # y-axis range with padding
+    if y_min_g != np.inf:
+        span = y_max_g - y_min_g or abs(y_max_g) or 1
+        ax_main.set_ylim(y_min_g - span * 0.08, y_max_g + span * 0.08)
 
-            # Annotate last value on right spine
-            ax_main.annotate(
-                f"{last_y:,.2f}" if abs(last_y) < 1000 else f"{last_y:,.0f}",
-                xy=(1, last_y), xycoords=("axes fraction", "data"),
-                xytext=(6, 0), textcoords="offset points",
-                color=color, fontsize=6.5, fontfamily=MONO,
-                va="center",
-            )
-
-            y_min_global = min(y_min_global, valid.min())
-            y_max_global = max(y_max_global, valid.max())
-
-    # y-axis range
-    if y_min_global != np.inf:
-        pad = (y_max_global - y_min_global) * 0.06 or abs(y_max_global) * 0.05 or 1
-        ax_main.set_ylim(y_min_global - pad, y_max_global + pad)
-
-    # ── x-axis formatting ─────────────────────────────────────────────────────
-    if is_time_series:
-        span_days = (x_vals.max() - x_vals.min()).days
-        if span_days <= 90:
-            ax_main.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
-            ax_main.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
-        elif span_days <= 548:
-            ax_main.xaxis.set_major_formatter(mdates.DateFormatter("%b '%y"))
-            ax_main.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-        elif span_days <= 1825:
-            ax_main.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
-            ax_main.xaxis.set_major_locator(mdates.MonthLocator(interval=6))
-        else:
-            ax_main.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-            ax_main.xaxis.set_major_locator(mdates.YearLocator())
-    else:
-        ax_main.set_xticks(range(len(x_vals)))
-        ax_main.set_xticklabels(list(x_vals), rotation=40, ha="right")
-
-    # ── Tick + label styling ──────────────────────────────────────────────────
-    ax_main.tick_params(axis="both", colors=TEXT_COL, labelsize=7,
-                        length=3, width=0.5, pad=4)
-    for lbl in ax_main.get_xticklabels() + ax_main.get_yticklabels():
+    # y-axis tick styling
+    ax_main.tick_params(axis="y", colors=TEXT_W, labelsize=7, length=3,
+                        width=0.4, pad=4)
+    for lbl in ax_main.get_yticklabels():
         lbl.set_fontfamily(MONO)
-        lbl.set_color(TEXT_COL)
+        lbl.set_color(TEXT_W)
         lbl.set_fontsize(7)
 
-    # y-axis number format
     ax_main.yaxis.set_major_formatter(mticker.FuncFormatter(
-        lambda v, _: f"{v:,.1f}" if abs(v) < 10_000 else f"{v:,.0f}"
+        lambda v, _: f"{v:,.0f}" if abs(v) >= 10 else f"{v:.2f}"
     ))
 
-    # Subtitle: series names below header
-    ax_main.set_title(
-        "  |  ".join(y_cols),
-        color=SUB_COL, fontsize=7, fontfamily=MONO,
-        loc="left", pad=5,
-    )
+    if y_label:
+        ax_main.set_ylabel(y_label, color=TEXT_DIM, fontsize=7,
+                           fontfamily=MONO, labelpad=8)
 
-    # Legend for multi-series
-    if len(y_cols) > 1:
-        ax_main.legend(
-            loc="upper left",
-            facecolor="#080808",
-            edgecolor=ORANGE,
-            labelcolor=TEXT_COL,
-            prop={"family": MONO, "size": 6.5},
-            framealpha=0.92,
-            borderpad=0.6,
+    # ── Y-AXIS PILLS ───────────────────────────────────────────────────────────
+    # Color-matched filled boxes overlaying the right y-axis at current value
+    for col, (color, last_val) in last_vals.items():
+        val_str = f"{last_val:.0f}" if abs(last_val) >= 1 else f"{last_val:.2f}"
+        ax_main.annotate(
+            f"  {val_str}  ",
+            xy=(1.0, last_val),
+            xycoords=("axes fraction", "data"),
+            xytext=(3, 0),
+            textcoords="offset points",
+            color=BG,
+            fontsize=7,
+            fontfamily=MONO,
+            fontweight="bold",
+            va="center",
+            annotation_clip=False,
+            zorder=10,
+            bbox=dict(facecolor=color, edgecolor="none", boxstyle="square,pad=0.2"),
         )
 
-    # ── Period selector bar ───────────────────────────────────────────────────
-    ax_period.set_facecolor("#080808")
-    ax_period.set_xlim(0, 1)
-    ax_period.set_ylim(0, 1)
-    ax_period.axis("off")
+    # ── CUSTOM LEGEND ──────────────────────────────────────────────────────────
+    # Black box, dark grey border, left-aligned labels, right-aligned values
+    n       = len(y_cols)
+    line_h  = 0.075
+    pad_v   = 0.022
+    leg_w   = 0.30
+    leg_h   = n * line_h + pad_v * 2
+    leg_x   = 0.012
+    leg_top = 0.988
 
-    for spine in ax_period.spines.values():
-        spine.set_edgecolor(ORANGE)
-        spine.set_linewidth(0.5)
+    ax_main.add_patch(mpatches.FancyBboxPatch(
+        (leg_x, leg_top - leg_h), leg_w, leg_h,
+        transform=ax_main.transAxes,
+        facecolor=LEGEND_BG, edgecolor=LEGEND_BD,
+        linewidth=0.7, boxstyle="square,pad=0",
+        zorder=9, clip_on=False,
+    ))
 
-    periods = ["1M", "3M", "6M", "YTD", "1Y", "2Y", "5Y", "10Y", "ALL"]
-    for i, p in enumerate(periods):
-        active = (i == 4)  # "1Y" highlighted by default
-        ax_period.text(
-            0.01 + i * 0.09 + 0.025, 0.50, p,
-            color=BG if active else SUB_COL,
-            fontsize=6.5, fontfamily=MONO,
-            va="center", ha="center",
-            bbox=dict(
-                facecolor=ORANGE if active else "#1A1A1A",
-                edgecolor=ORANGE if active else "#333333",
-                boxstyle="square,pad=0.35",
-                linewidth=0.5,
-            ),
+    for i, col in enumerate(y_cols):
+        color  = SERIES_COLORS[i % len(SERIES_COLORS)]
+        row_y  = leg_top - pad_v - (i + 0.5) * line_h
+
+        # Colour line sample
+        ax_main.plot(
+            [leg_x + 0.008, leg_x + 0.040], [row_y, row_y],
+            color=color, linewidth=1.6,
+            transform=ax_main.transAxes, zorder=11, clip_on=False,
         )
+        # Label
+        ax_main.text(
+            leg_x + 0.048, row_y, col,
+            color=TEXT_W, fontsize=6, fontfamily=MONO,
+            transform=ax_main.transAxes, va="center", zorder=11,
+        )
+        # Current value — right-aligned
+        if col in last_vals:
+            _, lv = last_vals[col]
+            val_str = f"{lv:.0f}" if abs(lv) >= 1 else f"{lv:.2f}"
+            ax_main.text(
+                leg_x + leg_w - 0.008, row_y, val_str,
+                color=color, fontsize=6, fontfamily=MONO, fontweight="bold",
+                transform=ax_main.transAxes, va="center", ha="right", zorder=11,
+            )
 
-    ax_period.text(0.978, 0.50, "Source: User Data", color="#555555",
-                   fontsize=5.5, fontfamily=MONO, va="center", ha="right")
+    # ── BOXED X-AXIS ───────────────────────────────────────────────────────────
+    # Solid vertical white lines separating years, year labels centred in each cell
+    ax_xbox.set_facecolor(XBOX_BG)
+    ax_xbox.set_ylim(0, 1)
+    ax_xbox.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
+    for sp in ax_xbox.spines.values():
+        sp.set_edgecolor(XLINE_COL)
+        sp.set_linewidth(0.6)
 
-    # ── Footer ────────────────────────────────────────────────────────────────
+    if is_time_series:
+        xlim  = ax_main.get_xlim()
+        ax_xbox.set_xlim(xlim)
+
+        t_min = mdates.num2date(xlim[0]).replace(tzinfo=None)
+        t_max = mdates.num2date(xlim[1]).replace(tzinfo=None)
+
+        # Collect boundary x-positions (Jan 1 of each year within range)
+        boundaries = []
+        for yr in range(t_min.year, t_max.year + 2):
+            xn = mdates.date2num(pd.Timestamp(f"{yr}-01-01"))
+            if xlim[0] < xn < xlim[1]:
+                boundaries.append((yr, xn))
+
+        # Draw separators and labels
+        prev_x = xlim[0]
+        prev_yr = t_min.year
+
+        for yr, xn in boundaries:
+            ax_xbox.axvline(xn, color=XLINE_COL, linewidth=0.7, zorder=3)
+            mid = (prev_x + xn) / 2
+            ax_xbox.text(mid, 0.50, str(prev_yr),
+                         color=TEXT_W, fontsize=7, fontfamily=MONO,
+                         ha="center", va="center", zorder=4)
+            prev_x  = xn
+            prev_yr = yr
+
+        # Last cell
+        mid = (prev_x + xlim[1]) / 2
+        ax_xbox.text(mid, 0.50, str(prev_yr),
+                     color=TEXT_W, fontsize=7, fontfamily=MONO,
+                     ha="center", va="center", zorder=4)
+
+    else:
+        n_cats = len(x_vals)
+        ax_xbox.set_xlim(-0.5, n_cats - 0.5)
+        for i in range(1, n_cats):
+            ax_xbox.axvline(i - 0.5, color=XLINE_COL, linewidth=0.7)
+        for i, lbl in enumerate(x_vals):
+            ax_xbox.text(i, 0.50, str(lbl), color=TEXT_W, fontsize=6.5,
+                         fontfamily=MONO, ha="center", va="center")
+
+    if x_label:
+        ax_xbox.set_xlabel(x_label, color=TEXT_DIM, fontsize=7,
+                           fontfamily=MONO, labelpad=3)
+
+    # ── FOOTER ─────────────────────────────────────────────────────────────────
     ax_footer.set_facecolor(BG)
     ax_footer.axis("off")
-    ax_footer.text(
-        0.005, 0.50,
-        "Copyright 2025 Bloomberg Finance L.P.  All rights reserved.  "
-        "This information may not be reproduced or recirculated without prior written permission.",
-        color=DIM_COL, fontsize=5, fontfamily=MONO, va="center",
-    )
+    ts = datetime.now().strftime("%d-%b-%Y %H:%M:%S")
+    ax_footer.text(0.005, 0.70,
+                   f"Copyright {datetime.now().year} Bloomberg Finance L.P.  "
+                   "All rights reserved.  "
+                   "This information may not be reproduced without prior written permission.",
+                   color=TEXT_FAINT, fontsize=5.5, fontfamily=MONO, va="center")
+    ax_footer.text(0.005, 0.25, ts, color=TEXT_FAINT, fontsize=5.5,
+                   fontfamily=MONO, va="center")
 
-    # ── Export PNG ────────────────────────────────────────────────────────────
+    # ── EXPORT ─────────────────────────────────────────────────────────────────
     buf = io.BytesIO()
     fig.savefig(buf, format="png", facecolor=BG, dpi=150)
     plt.close(fig)
