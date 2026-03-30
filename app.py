@@ -123,6 +123,7 @@ def init_state():
         "company_transcript": None,
         "company_ticker": "",
         "macro_results": [],
+        "macro_gen_v": 0,
         "stock_results": [],
         "stock_gen_v": 0,
         "selected_release": "",
@@ -363,6 +364,7 @@ with tab_macro:
                             tone="dry" if "Dry" in tone else "neutral",
                             geo_context=geo_context,
                         )
+                        st.session_state.macro_gen_v += 1
                         st.session_state.macro_results = parse_tweet_blocks(result)
                         st.session_state.macro_mode_used = "data"
                     except Exception as e:
@@ -412,6 +414,7 @@ with tab_macro:
                             format_type=fmt_map.get(ex_fmt, "single"),
                             emphasis=[emphasis_map[e] for e in emphasis if e in emphasis_map],
                         )
+                        st.session_state.macro_gen_v += 1
                         st.session_state.macro_results = parse_tweet_blocks(result)
                         st.session_state.macro_mode_used = "explainer"
                     except Exception as e:
@@ -422,11 +425,10 @@ with tab_macro:
         mode_badge = "Data-First" if st.session_state.get("macro_mode_used") == "data" else "Explainer"
         st.markdown(f"---\n**{mode_badge}** · {len(st.session_state.macro_results)} variations")
 
+        gen = st.session_state.macro_gen_v
         for i, block in enumerate(st.session_state.macro_results):
             content = block["content"]
             angle = block["angle"]
-            char_count = len(content)
-            is_over = char_count > 280
 
             with st.container():
                 st.markdown(f'<span class="tweet-angle">{angle}</span>', unsafe_allow_html=True)
@@ -434,7 +436,7 @@ with tab_macro:
                     f"Tweet {i+1}",
                     value=content,
                     height=120,
-                    key=f"macro_tweet_{i}",
+                    key=f"macro_tweet_{gen}_{i}",
                     label_visibility="collapsed",
                 )
                 count_class = "over" if len(edited) > 280 else ""
@@ -444,10 +446,10 @@ with tab_macro:
                 )
                 col_copy, col_trim, _ = st.columns([1, 1, 4])
                 with col_copy:
-                    st.button("📋 Copy", key=f"macro_copy_{i}", on_click=lambda t=edited: st.write(t))
+                    st.button("📋 Copy", key=f"macro_copy_{gen}_{i}")
                 with col_trim:
                     if len(edited) > 280:
-                        if st.button("✂️ Trim", key=f"macro_trim_{i}"):
+                        if st.button("✂️ Trim", key=f"macro_trim_{gen}_{i}"):
                             st.session_state.macro_results[i]["content"] = edited[:277] + "..."
                             st.rerun()
                 st.markdown("---")
