@@ -557,6 +557,10 @@ with tab_stock:
                             format_type=fmt_map.get(stock_fmt, "single"),
                             angles=[angle_map[a] for a in stock_angles if a in angle_map],
                         )
+                        # Clear cached widget values so text_areas re-render with new content
+                        for k in list(st.session_state.keys()):
+                            if k.startswith("stock_tweet_"):
+                                del st.session_state[k]
                         st.session_state.stock_results = parse_tweet_blocks(result)
                     except Exception as e:
                         st.error(f"Generation failed: {e}")
