@@ -13,6 +13,7 @@ from utils.api import (
     generate_stock_tweets,
 )
 from utils.helpers import parse_tweet_blocks, get_upcoming_releases, format_date_label
+from utils.chart import parse_pasted_data, detect_date_col, render_bloomberg_chart
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -196,7 +197,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Tabs
-tab_macro, tab_stock = st.tabs(["① Macro Data", "② Stock Intelligence"])
+tab_macro, tab_stock, tab_chart = st.tabs(["① Macro Data", "② Stock Intelligence", "③ Bloomberg Chart"])
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -596,3 +597,84 @@ with tab_stock:
 
     else:
         st.info("Enter a ticker above and click **Pull Data →** to load earnings call + news.")
+
+
+# ══════════════════════════════════════════════════════════════════
+# BLOOMBERG CHART TAB
+# ══════════════════════════════════════════════════════════════════
+with tab_chart:
+    st.markdown("### Bloomberg Chart Generator")
+    st.caption("Paste data from Excel or CSV — outputs a Bloomberg GP-style chart")
+
+    raw_data = st.text_area(
+        "Paste data here",
+        height=160,
+        placeholder="Copy from Excel or paste CSV — first row must be column headers",
+        key="chart_raw_data",
+    )
+
+    if raw_data.strip():
+        try:
+            df_chart = parse_pasted_data(raw_data)
+            st.dataframe(df_chart.head(5), use_container_width=True)
+
+            date_col_guess = detect_date_col(df_chart)
+            all_cols = df_chart.columns.tolist()
+
+            col_x, col_y = st.columns(2)
+            with col_x:
+                x_col = st.selectbox(
+                    "X axis (date or category column)",
+                    all_cols,
+                    index=all_cols.index(date_col_guess) if date_col_guess else 0,
+                    key="chart_x_col",
+                )
+            with col_y:
+                y_default = [c for c in all_cols if c != x_col][:3]
+                y_cols = st.multiselect(
+                    "Y axis (data series — up to 5)",
+                    [c for c in all_cols if c != x_col],
+                    default=y_default,
+                    key="chart_y_cols",
+                )
+
+            col_title, col_ts = st.columns([3, 1])
+            with col_title:
+                chart_title = st.text_input(
+                    "Chart title / ticker",
+                    placeholder="e.g. AAPL US Equity",
+                    key="chart_title",
+                )
+            with col_ts:
+                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                is_ts = st.checkbox("Time series", value=bool(date_col_guess), key="chart_is_ts")
+
+            if st.button("Generate Chart", type="primary", use_container_width=True, key="chart_gen_btn"):
+                if not y_cols:
+                    st.error("Select at least one Y axis column.")
+                else:
+                    with st.spinner("Rendering..."):
+                        try:
+                            png = render_bloomberg_chart(
+                                df=df_chart,
+                                x_col=x_col,
+                                y_cols=y_cols,
+                                title=chart_title,
+                                is_time_series=is_ts,
+                            )
+                            st.session_state.chart_png = png
+                        except Exception as e:
+                            st.error(f"Chart error: {e}")
+
+        except Exception as e:
+            st.error(f"Could not parse data: {e}")
+
+    if st.session_state.get("chart_png"):
+        st.image(st.session_state.chart_png, use_container_width=True)
+        st.download_button(
+            "⬇ Download PNG",
+            data=st.session_state.chart_png,
+            file_name="bloomberg_chart.png",
+            mime="image/png",
+            key="chart_download",
+        )
