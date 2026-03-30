@@ -476,6 +476,7 @@ with tab_stock:
                 st.session_state.company_ticker = ticker_input
                 st.session_state.company_news = news
                 st.session_state.company_transcript = transcript
+                st.session_state.stock_results = []
                 st.success(f"✓ ${ticker_input} loaded")
 
     # Show data preview if loaded
