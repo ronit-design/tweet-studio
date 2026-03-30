@@ -123,7 +123,7 @@ def init_state():
         "company_ticker": "",
         "macro_results": [],
         "stock_results": [],
-        "stock_gen": 0,
+        "stock_gen_v": 0,
         "selected_release": "",
         "cal_country_filter": {"US", "CN", "JP", "KR", "IN", "EU", "UK"},
     }
@@ -544,7 +544,7 @@ with tab_stock:
         }
         fmt_map = {"Single Tweet": "single", "Thread": "thread", "Hot Take": "hot"}
 
-        if st.button("⚡ Generate Tweets from Real Data", type="primary", use_container_width=True, key="stock_gen"):
+        if st.button("⚡ Generate Tweets from Real Data", type="primary", use_container_width=True, key="stock_gen_btn"):
             if not stock_angles:
                 st.error("Select at least one angle.")
             else:
@@ -558,7 +558,7 @@ with tab_stock:
                             format_type=fmt_map.get(stock_fmt, "single"),
                             angles=[angle_map[a] for a in stock_angles if a in angle_map],
                         )
-                        st.session_state.stock_gen += 1
+                        st.session_state.stock_gen_v += 1
                         st.session_state.stock_results = parse_tweet_blocks(result)
                     except Exception as e:
                         st.error(f"Generation failed: {e}")
@@ -571,7 +571,7 @@ with tab_stock:
                 angle = block["angle"]
 
                 st.markdown(f'<span class="tweet-angle">{angle}</span>', unsafe_allow_html=True)
-                gen = st.session_state.stock_gen
+                gen = st.session_state.stock_gen_v
                 edited = st.text_area(
                     f"Stock tweet {i+1}",
                     value=content,
