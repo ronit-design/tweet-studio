@@ -270,6 +270,8 @@ with tab_macro:
                     help=cat["ex"],
                 ):
                     st.session_state.selected_cat_id = cat["id"]
+                    if cat.get("releases"):
+                        st.session_state.selected_release = cat["releases"][0]
                     st.rerun()
 
         # Get selected category data
