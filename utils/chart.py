@@ -35,8 +35,18 @@ SERIES_COLORS = [AMBER, CYAN, YELLOW, GREEN, MAGENTA, PINK, LIME]
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
 
+def _looks_like_date(s: str) -> bool:
+    try:
+        pd.to_datetime(str(s).strip())
+        return True
+    except Exception:
+        return False
+
+
 def parse_pasted_data(raw: str) -> pd.DataFrame:
-    """Parse tab-separated (Excel paste) or comma-separated data."""
+    """Parse tab-separated (Excel paste) or comma-separated data.
+    Handles both normal (dates as rows) and transposed (dates as column headers) layouts.
+    """
     import csv
 
     # Normalise line endings
@@ -58,6 +68,15 @@ def parse_pasted_data(raw: str) -> pd.DataFrame:
 
     df = pd.read_csv(io.StringIO(raw), sep=sep, thousands=thousands)
     df.columns = [str(c).strip() for c in df.columns]
+
+    # Auto-detect transposed layout: if most column headers look like dates,
+    # the user pasted dates as columns — flip to rows.
+    date_col_count = sum(1 for c in df.columns if _looks_like_date(c))
+    if date_col_count >= len(df.columns) * 0.7 and len(df.columns) > 3:
+        df = df.T.reset_index()
+        df.columns = ["Date"] + [f"Value {i + 1}" if len(df.columns) > 2 else "Value"
+                                  for i in range(len(df.columns) - 1)]
+
     return df
 
 
