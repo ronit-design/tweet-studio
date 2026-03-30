@@ -217,6 +217,12 @@ with tab_macro:
     )
     geo_mode = "us" if "United States" in geo else "intl"
 
+    # Clear results when switching geography
+    if st.session_state.get("_prev_geo") != geo_mode:
+        st.session_state.macro_results = []
+        st.session_state.macro_gen_v += 1
+        st.session_state["_prev_geo"] = geo_mode
+
     # Country selector (international only)
     active_countries = set()
     if geo_mode == "intl":
@@ -233,13 +239,19 @@ with tab_macro:
 
     st.divider()
 
-    # Mode toggle
+    # Mode toggle — clear results when switching modes
     mode = st.radio(
         "Mode",
         ["📊 Data-First", "📖 Explainer"],
         horizontal=True,
         key="macro_mode",
     )
+
+    # Clear results when switching between Data-First and Explainer
+    if st.session_state.get("_prev_mode") != mode:
+        st.session_state.macro_results = []
+        st.session_state.macro_gen_v += 1
+        st.session_state["_prev_mode"] = mode
 
     # ── DATA-FIRST MODE ──────────────────────────────────────────
     if "Data-First" in mode:
