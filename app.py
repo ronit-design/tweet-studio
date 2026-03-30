@@ -123,6 +123,7 @@ def init_state():
         "company_ticker": "",
         "macro_results": [],
         "stock_results": [],
+        "stock_gen": 0,
         "selected_release": "",
         "cal_country_filter": {"US", "CN", "JP", "KR", "IN", "EU", "UK"},
     }
@@ -557,10 +558,7 @@ with tab_stock:
                             format_type=fmt_map.get(stock_fmt, "single"),
                             angles=[angle_map[a] for a in stock_angles if a in angle_map],
                         )
-                        # Clear cached widget values so text_areas re-render with new content
-                        for k in list(st.session_state.keys()):
-                            if k.startswith("stock_tweet_"):
-                                del st.session_state[k]
+                        st.session_state.stock_gen += 1
                         st.session_state.stock_results = parse_tweet_blocks(result)
                     except Exception as e:
                         st.error(f"Generation failed: {e}")
@@ -573,11 +571,12 @@ with tab_stock:
                 angle = block["angle"]
 
                 st.markdown(f'<span class="tweet-angle">{angle}</span>', unsafe_allow_html=True)
+                gen = st.session_state.stock_gen
                 edited = st.text_area(
                     f"Stock tweet {i+1}",
                     value=content,
                     height=120,
-                    key=f"stock_tweet_{i}",
+                    key=f"stock_tweet_{gen}_{i}",
                     label_visibility="collapsed",
                 )
                 count_class = "over" if len(edited) > 280 else ""
@@ -587,10 +586,10 @@ with tab_stock:
                 )
                 col_copy, col_trim, _ = st.columns([1, 1, 4])
                 with col_copy:
-                    st.button("📋 Copy", key=f"stock_copy_{i}")
+                    st.button("📋 Copy", key=f"stock_copy_{gen}_{i}")
                 with col_trim:
                     if len(edited) > 280:
-                        if st.button("✂️ Trim", key=f"stock_trim_{i}"):
+                        if st.button("✂️ Trim", key=f"stock_trim_{gen}_{i}"):
                             st.session_state.stock_results[i]["content"] = edited[:277] + "..."
                             st.rerun()
                 st.markdown("---")
