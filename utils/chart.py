@@ -138,7 +138,7 @@ def render_bloomberg_chart(
     ax_main.spines["right"].set_linewidth(0.5)
 
     # Horizontal gridlines only, no vertical
-    ax_main.yaxis.grid(True, color=GRID_H, linewidth=0.4, linestyle="-", alpha=0.3)
+    ax_main.yaxis.grid(True, color=GRID_H, linewidth=0.8, linestyle="-", alpha=0.7)
     ax_main.xaxis.grid(False)
     ax_main.set_axisbelow(True)
 
