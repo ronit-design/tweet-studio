@@ -127,6 +127,11 @@ def render_bloomberg_chart(
     ax_xbox   = fig.add_axes([L,    0.035, W,    0.060])   # boxed x-axis
     ax_footer = fig.add_axes([0.00, 0.000, 1.00, 0.035])   # footer
 
+    # ── TITLE ──────────────────────────────────────────────────────────────────
+    if title:
+        fig.text(L, 0.988, title, color=TEXT_W, fontsize=11,
+                 fontfamily=MONO, fontweight="bold", va="top")
+
     # ── MAIN CHART ─────────────────────────────────────────────────────────────
     ax_main.set_facecolor(BG)
 
