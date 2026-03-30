@@ -23,7 +23,7 @@ ORANGE_2    = "#FF9900"
 GREEN_3     = "#33FF99"
 MAGENTA_4   = "#FF33CC"
 YELLOW_5    = "#FFFF33"
-GRID_H      = "#2A2A2A"
+GRID_H      = "#FFFFFF"
 TEXT_W      = "#FFFFFF"
 TEXT_DIM    = "#888888"
 TEXT_FAINT  = "#505050"
@@ -138,7 +138,7 @@ def render_bloomberg_chart(
     ax_main.spines["right"].set_linewidth(0.5)
 
     # Horizontal gridlines only, no vertical
-    ax_main.yaxis.grid(True, color=GRID_H, linewidth=0.6, linestyle="-")
+    ax_main.yaxis.grid(True, color=GRID_H, linewidth=0.4, linestyle="-", alpha=0.3)
     ax_main.xaxis.grid(False)
     ax_main.set_axisbelow(True)
 
@@ -313,11 +313,11 @@ def render_bloomberg_chart(
     ax_footer.set_facecolor(BG)
     ax_footer.axis("off")
     ts = datetime.now().strftime("%d-%b-%Y %H:%M:%S")
-    footer_left  = f"  {title}  " + f"Copyright\u00ae {datetime.now().year} Bloomberg Finance L.P.  All rights reserved."
+    footer_left = f"  {title}  Public Resources" if title else "  Public Resources"
     ax_footer.text(0.005, 0.50, footer_left,
-                   color=TEXT_FAINT, fontsize=5.5, fontfamily=MONO, va="center")
+                   color=TEXT_W, fontsize=5.5, fontfamily=MONO, va="center")
     ax_footer.text(0.995, 0.50, ts,
-                   color=TEXT_FAINT, fontsize=5.5, fontfamily=MONO,
+                   color=TEXT_W, fontsize=5.5, fontfamily=MONO,
                    va="center", ha="right")
 
     # ── EXPORT ─────────────────────────────────────────────────────────────────
