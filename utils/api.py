@@ -1,23 +1,46 @@
 # utils/api.py
-# All external API calls: Anthropic (Claude) and roic.ai
+# All external API calls: NVIDIA and roic.ai
 
-import anthropic
 import requests
 import streamlit as st
-import json
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_anthropic_client():
-    api_key = st.secrets.get("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not set. Add it to .streamlit/secrets.toml or .env")
-    return anthropic.Anthropic(api_key=api_key)
+NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+NVIDIA_MODEL   = "nvidia/llama-3.1-nemotron-ultra-253b-v1"
+
+
+def get_nvidia_key():
+    return st.secrets.get("NVIDIA_API_KEY") or os.getenv("NVIDIA_API_KEY", "")
 
 def get_roic_key():
     return st.secrets.get("ROIC_API_KEY") or os.getenv("ROIC_API_KEY", "")
+
+
+def _call_nvidia(system_prompt: str, user_prompt: str, max_tokens: int = 1500) -> str:
+    """Single NVIDIA API call. Returns text or raises."""
+    api_key = get_nvidia_key()
+    r = requests.post(
+        NVIDIA_API_URL,
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {api_key}"},
+        json={
+            "model": NVIDIA_MODEL,
+            "max_tokens": max_tokens,
+            "temperature": 0.6,
+            "top_p": 0.95,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+        },
+        timeout=120,
+    )
+    r.raise_for_status()
+    msg = r.json()["choices"][0]["message"]
+    return str(msg.get("content") or msg.get("reasoning_content") or msg.get("text") or "").strip()
 
 
 # ── roic.ai calls (server-side, no CORS issue) ────────────────────────────────
@@ -60,7 +83,7 @@ def fetch_earnings_call_list(ticker: str) -> list:
         return []
 
 
-# ── Claude API calls ──────────────────────────────────────────────────────────
+# ── Generation calls ──────────────────────────────────────────────────────────
 
 def generate_data_first_tweets(
     release: str,
@@ -72,7 +95,6 @@ def generate_data_first_tweets(
     geo_context: str,
 ) -> str:
     """Generate data-first tweets (Liz Ann style)"""
-    client = get_anthropic_client()
 
     format_instr = (
         "Write 2 distinct short threads of 3–4 tweets. First tweet leads with the data, "
@@ -106,29 +128,22 @@ STYLE: No AI tells. Use "…" for breaks. Source tag if relevant. No hashtags. C
 After each tweet/thread: ANGLE: [2–3 word label]
 Return ONLY tweets and ANGLE labels. No preamble."""
 
-    needs_search = not numbers.strip()
-    user_prompt = (
-        f"Release: {release}\nGeography: {geo_context}\n"
-        f"{f'Subcomponents: {subcomps}' if subcomps else ''}\n"
-        f"{f'Context: {context}' if context else ''}\n\n"
-        "Search for the most recent actual reading, estimate, and prior reading. Write tweets based on real figures."
-        if needs_search else
-        f"Release: {release}\nNumbers: {numbers}\n"
-        f"{f'Subcomponents: {subcomps}' if subcomps else ''}\n"
-        f"{f'Context: {context}' if context else ''}\n\nWrite tweets using exactly these figures."
-    )
+    if not numbers.strip():
+        user_prompt = (
+            f"Release: {release}\nGeography: {geo_context}\n"
+            f"{f'Subcomponents: {subcomps}' if subcomps else ''}\n"
+            f"{f'Context: {context}' if context else ''}\n\n"
+            "Use your knowledge of recent economic data to find the most recent actual reading, "
+            "estimate, and prior reading. Write tweets based on real figures."
+        )
+    else:
+        user_prompt = (
+            f"Release: {release}\nNumbers: {numbers}\n"
+            f"{f'Subcomponents: {subcomps}' if subcomps else ''}\n"
+            f"{f'Context: {context}' if context else ''}\n\nWrite tweets using exactly these figures."
+        )
 
-    kwargs = dict(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1500,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-    if needs_search:
-        kwargs["tools"] = [{"type": "web_search_20250305", "name": "web_search"}]
-
-    response = client.messages.create(**kwargs)
-    return _extract_text(response)
+    return _call_nvidia(system_prompt, user_prompt)
 
 
 def generate_explainer_tweets(
@@ -138,7 +153,6 @@ def generate_explainer_tweets(
     emphasis: list[str],
 ) -> str:
     """Generate explainer/educational tweets"""
-    client = get_anthropic_client()
 
     format_map = {
         "single": "Write 3 distinct single explainer tweets (max 280 chars each), each covering a different facet.",
@@ -148,9 +162,9 @@ def generate_explainer_tweets(
 
     emphasis_map = {
         "methodology": "Explain HOW this data is collected — which agency, what survey, sample size, revision schedule.",
-        "relevance": "Explain WHY this matters — Fed signals, market implications, business impact.",
-        "history": "Historical context — compare to prior cycles, recessions, peaks.",
-        "global": "Compare to equivalent data from other major economies.",
+        "relevance":   "Explain WHY this matters — Fed signals, market implications, business impact.",
+        "history":     "Historical context — compare to prior cycles, recessions, peaks.",
+        "global":      "Compare to equivalent data from other major economies.",
     }
 
     emphasis_text = " ".join(emphasis_map[e] for e in emphasis if e in emphasis_map)
@@ -164,18 +178,13 @@ EMPHASIS: {emphasis_text}
 After each tweet/thread: ANGLE: [2–3 word label]
 Return ONLY tweets and ANGLE labels. No preamble."""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1500,
-        system=system_prompt,
-        messages=[{"role": "user", "content": (
-            f"Topic: {topic}"
-            f"{chr(10) + 'Data: ' + data if data else ''}"
-            "\n\nSearch for official methodology, agency, release schedule, and historical context."
-        )}],
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+    user_prompt = (
+        f"Topic: {topic}"
+        f"{chr(10) + 'Data: ' + data if data else ''}"
+        "\n\nUse your knowledge to provide official methodology, agency details, release schedule, and historical context."
     )
-    return _extract_text(response)
+
+    return _call_nvidia(system_prompt, user_prompt)
 
 
 def generate_stock_tweets(
@@ -187,7 +196,6 @@ def generate_stock_tweets(
     angles: list[str],
 ) -> str:
     """Generate stock intelligence tweets from real earnings call + news data"""
-    client = get_anthropic_client()
 
     format_map = {
         "single": "Write 3 distinct single tweets (max 280 chars each), each from a different angle.",
@@ -211,7 +219,7 @@ def generate_stock_tweets(
     ) or "Not available"
 
     quarter = transcript.get("quarter", "?") if transcript else "?"
-    year = transcript.get("year", "") if transcript else ""
+    year    = transcript.get("year", "") if transcript else ""
 
     system_prompt = f"""You are a finance Twitter ghostwriter for a sophisticated investor who reads earnings call transcripts and filings.
 
@@ -239,19 +247,4 @@ Return ONLY tweets and ANGLE labels. No preamble."""
         "Write tweets grounded ONLY in the data above. Quote specific figures, specific transcript language, specific metrics."
     )
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1500,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-    return _extract_text(response)
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _extract_text(response) -> str:
-    """Extract text blocks from Anthropic response"""
-    return "\n".join(
-        block.text for block in response.content if hasattr(block, "text")
-    ).strip()
+    return _call_nvidia(system_prompt, user_prompt)
