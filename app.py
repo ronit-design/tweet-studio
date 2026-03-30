@@ -274,6 +274,7 @@ with tab_macro:
                     if cat.get("releases"):
                         st.session_state.selected_release = cat["releases"][0]
                         st.session_state["df_release"] = cat["releases"][0]
+                    st.session_state["df_subcomps_input"] = ""
                     st.rerun()
 
         # Get selected category data
@@ -313,19 +314,17 @@ with tab_macro:
         # Subcomponent hints
         if selected_cat:
             st.markdown('<div class="section-label">Subcomponents (click to add)</div>', unsafe_allow_html=True)
-            subcomp_input = st.session_state.get("df_subcomps", "")
             subcomp_cols = st.columns(8)
             for i, sc in enumerate(selected_cat["subcomps"]):
                 with subcomp_cols[i % 8]:
                     if st.button(sc, key=f"sc_{sc}", use_container_width=True, help="Add to subcomponents"):
-                        current = st.session_state.get("df_subcomps", "")
+                        current = st.session_state.get("df_subcomps_input", "")
                         if sc not in current:
-                            st.session_state.df_subcomps = (current + ", " + sc).strip(", ")
+                            st.session_state["df_subcomps_input"] = (current + ", " + sc).strip(", ")
                         st.rerun()
 
         subcomps = st.text_input(
             "Subcomponents",
-            value=st.session_state.get("df_subcomps", ""),
             placeholder="e.g. employment up, capex plans up, input prices spiked...",
             key="df_subcomps_input",
         )
