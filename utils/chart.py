@@ -1,5 +1,5 @@
 # utils/chart.py
-# Bloomberg GP-style chart renderer
+# Bloomberg GP-style chart renderer — v2
 
 import csv
 import io

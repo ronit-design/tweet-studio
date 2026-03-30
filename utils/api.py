@@ -1,6 +1,7 @@
 # utils/api.py
-# All external API calls: NVIDIA and roic.ai
+# All external API calls: Anthropic (macro), NVIDIA (stock), roic.ai
 
+import anthropic
 import requests
 import streamlit as st
 import os
@@ -10,13 +11,35 @@ load_dotenv()
 
 NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NVIDIA_MODEL   = "nvidia/llama-3.1-nemotron-ultra-253b-v1"
+HAIKU_MODEL    = "claude-haiku-4-5-20251001"
 
 
 def get_nvidia_key():
     return st.secrets.get("NVIDIA_API_KEY") or os.getenv("NVIDIA_API_KEY", "")
 
+def get_anthropic_key():
+    return st.secrets.get("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY", "")
+
 def get_roic_key():
     return st.secrets.get("ROIC_API_KEY") or os.getenv("ROIC_API_KEY", "")
+
+
+def _call_haiku(system_prompt: str, user_prompt: str, max_tokens: int = 1500) -> str:
+    """Anthropic Haiku call with web search — used for macro tab."""
+    client = anthropic.Anthropic(api_key=get_anthropic_key())
+    needs_search = True  # always enable web search for macro data
+    kwargs = dict(
+        model=HAIKU_MODEL,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    if needs_search:
+        kwargs["tools"] = [{"type": "web_search_20250305", "name": "web_search"}]
+    response = client.messages.create(**kwargs)
+    return "\n".join(
+        block.text for block in response.content if hasattr(block, "text")
+    ).strip()
 
 
 def _call_nvidia(system_prompt: str, user_prompt: str, max_tokens: int = 1500) -> str:
@@ -143,7 +166,7 @@ Return ONLY tweets and ANGLE labels. No preamble."""
             f"{f'Context: {context}' if context else ''}\n\nWrite tweets using exactly these figures."
         )
 
-    return _call_nvidia(system_prompt, user_prompt)
+    return _call_haiku(system_prompt, user_prompt)
 
 
 def generate_explainer_tweets(
@@ -184,7 +207,7 @@ Return ONLY tweets and ANGLE labels. No preamble."""
         "\n\nUse your knowledge to provide official methodology, agency details, release schedule, and historical context."
     )
 
-    return _call_nvidia(system_prompt, user_prompt)
+    return _call_haiku(system_prompt, user_prompt)
 
 
 def generate_stock_tweets(
