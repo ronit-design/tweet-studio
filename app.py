@@ -3,7 +3,6 @@
 
 import streamlit as st
 from datetime import date, timedelta
-import pyperclip
 
 from utils.data import US_CATEGORIES, INTL_CATEGORIES, COUNTRIES, COUNTRY_COLORS
 from utils.api import (
