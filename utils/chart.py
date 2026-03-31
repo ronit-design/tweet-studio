@@ -177,10 +177,10 @@ def render_bloomberg_chart(
             y_min_g = min(y_min_g, float(valid.min()))
             y_max_g = max(y_max_g, float(valid.max()))
 
-    # y-axis range with padding, starting at 0
+    # y-axis range with padding
     if y_min_g != np.inf:
-        span = y_max_g - 0 or abs(y_max_g) or 1
-        ax_main.set_ylim(0, y_max_g + span * 0.08)
+        span = y_max_g - y_min_g or abs(y_max_g) or 1
+        ax_main.set_ylim(y_min_g - span * 0.08, y_max_g + span * 0.08)
 
     # y-axis tick styling
     ax_main.tick_params(axis="y", colors=TEXT_W, labelsize=7, length=3,
@@ -251,7 +251,7 @@ def render_bloomberg_chart(
         # Label (editable name)
         ax_main.text(
             leg_x + 0.048, row_y, disp_lbl,
-            color=TEXT_W, fontsize=6, fontfamily=MONO,
+            color=TEXT_W, fontsize=8, fontfamily=MONO,
             transform=ax_main.transAxes, va="center", zorder=11,
         )
         # Current value — right-aligned
@@ -260,7 +260,7 @@ def render_bloomberg_chart(
             val_str = f"{lv:.0f}" if abs(lv) >= 1 else f"{lv:.2f}"
             ax_main.text(
                 leg_x + leg_w - 0.008, row_y, val_str,
-                color=color, fontsize=6, fontfamily=MONO, fontweight="bold",
+                color=color, fontsize=8, fontfamily=MONO, fontweight="bold",
                 transform=ax_main.transAxes, va="center", ha="right", zorder=11,
             )
 
