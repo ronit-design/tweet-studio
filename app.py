@@ -675,6 +675,19 @@ with tab_chart:
                 y_label = st.text_input("Y axis label (optional)", key="chart_y_label",
                                         placeholder="e.g. Index Value")
 
+            # Series label editors
+            series_labels = {}
+            if y_cols:
+                st.markdown("**Legend labels** (edit series names shown on chart)")
+                label_cols = st.columns(min(len(y_cols), 3))
+                for i, col in enumerate(y_cols):
+                    with label_cols[i % 3]:
+                        series_labels[col] = st.text_input(
+                            col, value=col, key=f"series_label_{col}",
+                            label_visibility="collapsed",
+                            placeholder=col,
+                        )
+
             if st.button("Generate Chart", type="primary", use_container_width=True, key="chart_gen_btn"):
                 if not y_cols:
                     st.error("Select at least one Y axis column.")
@@ -685,6 +698,7 @@ with tab_chart:
                                 df=df_chart,
                                 x_col=x_col,
                                 y_cols=y_cols,
+                                series_labels=series_labels,
                                 title=chart_title,
                                 x_label=x_label,
                                 y_label=y_label,

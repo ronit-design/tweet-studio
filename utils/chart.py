@@ -102,12 +102,16 @@ def render_bloomberg_chart(
     df: pd.DataFrame,
     x_col: str,
     y_cols: list[str],
+    series_labels: dict[str, str] | None = None,
     title: str = "",
     x_label: str = "",
     y_label: str = "",
     is_time_series: bool = True,
 ) -> bytes:
     """Render a Bloomberg GP-style chart. Returns PNG bytes."""
+
+    # Resolve display labels (fall back to column name if not provided)
+    labels = {col: (series_labels or {}).get(col) or col for col in y_cols}
 
     # Prepare x values
     if is_time_series:
@@ -227,14 +231,16 @@ def render_bloomberg_chart(
     ax_main.add_patch(mpatches.FancyBboxPatch(
         (leg_x, leg_top - leg_h), leg_w, leg_h,
         transform=ax_main.transAxes,
-        facecolor=LEGEND_BG, edgecolor=LEGEND_BD,
+        facecolor=(0, 0, 0, 0),  # fully transparent
+        edgecolor=LEGEND_BD,
         linewidth=0.7, boxstyle="square,pad=0",
         zorder=9, clip_on=False,
     ))
 
     for i, col in enumerate(y_cols):
-        color  = SERIES_COLORS[i % len(SERIES_COLORS)]
-        row_y  = leg_top - pad_v - (i + 0.5) * line_h
+        color    = SERIES_COLORS[i % len(SERIES_COLORS)]
+        row_y    = leg_top - pad_v - (i + 0.5) * line_h
+        disp_lbl = labels[col]
 
         # Colour line sample
         ax_main.plot(
@@ -242,9 +248,9 @@ def render_bloomberg_chart(
             color=color, linewidth=1.6,
             transform=ax_main.transAxes, zorder=11, clip_on=False,
         )
-        # Label
+        # Label (editable name)
         ax_main.text(
-            leg_x + 0.048, row_y, col,
+            leg_x + 0.048, row_y, disp_lbl,
             color=TEXT_W, fontsize=6, fontfamily=MONO,
             transform=ax_main.transAxes, va="center", zorder=11,
         )
